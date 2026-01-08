@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon-192.png">
+
+    <title>写作空间</title>
+    <style>
+        /* 极简样式 - 只有一个编辑器和底部统计 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* PWA Window Controls Overlay 模式：让内容绘制到标题栏区域（看起来“没有上边框空白”） */
+        html.wco, html.wco body {
+            background-color: #ffffff;
+        }
+        
+        
+
+        :root {
+            --editor-padding-x: 14px;
+            --editor-padding-y: 0px;
+            --editor-font-size: 18px;
+            --editor-text-align: left;
+            --editor-color: #2f2f2f;
+        }
+
+/* 编辑器区域 - 占满所有空间 */
+        #editor {
+            flex: 1;
+            width: 100%;
+            padding: var(--editor-padding-y) var(--editor-padding-x);
+            font-size: var(--editor-font-size);
+            line-height: 1.8;
+            border: none;
+            resize: none;
+            background-color: transparent;
+            color: var(--editor-color);
+            text-align: var(--editor-text-align);
+        }
+        
+        #editor:focus {
+            outline: none;
+        }
+        
+        /* 底部状态栏 - 极简 */
+        .status-bar {
+            height: 40px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 14px;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 25px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .stat-value {
+            font-weight: 600;
+            color: #495057;
+            font-size: 16px;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        
+        /* 控制按钮 */
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 4px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #495057;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #f8f9fa;
+            border-color: #adb5bd;
+        }
+
+        .btn.active {
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        /* 隐藏的颜色选择器（用来弹出系统颜色选择面板） */
+        .color-picker-hidden {
+            position: fixed;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+        
+        /* 安装指导弹窗 - 移除，因为不需要安装功能了 */
+        .install-guide {
+            display: none; /* 完全隐藏 */
+        }
+        
+        /* 临时消息提示 */
+        .message {
+            position: fixed;
+            bottom: 50px;
+            right: 20px;
+            background-color: #495057;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* 导出选项弹窗 */
+        .export-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 10px;
+            padding: 25px;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #212529;
+        }
+        
+        .export-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+        
+        .export-option {
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .export-option:hover {
+            background-color: #f8f9fa;
+            border-color: #adb5bd;
+        }
+        
+        .option-icon {
+            font-size: 18px;
+            color: #6c757d;
+        }
+        
+        .option-text {
+            flex: 1;
+        }
+        
+        .option-title {
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        
+        .option-desc {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 编辑器 -->
+    <textarea id="editor" placeholder="开始写作... 按Ctrl+S保存"></textarea>
+    
+    <!-- 底部状态栏 -->
+    <div class="status-bar">
+        <div class="stats">
+            <div class="stat-item">
+                <span id="word-count" class="stat-value">0</span>
+                <span class="stat-label">字数</span>
+            </div>
+            <div class="stat-item">
+                <span id="speed-count" class="stat-value">0</span>
+                <span class="stat-label">字/分</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" id="align-center-btn" title="居中/左对齐 (Ctrl+Shift+C)">居中</button>
+            <select class="btn" id="font-color-select" title="字体颜色">
+                <option value="#2f2f2f">灰黑</option>
+                <option value="#2c3440">墨蓝</option>
+                <option value="#2f3a34">墨绿</option>
+                <option value="#3a2f2a">咖啡</option>
+                <option value="#34303a">紫灰</option>
+                <option value="custom">自定义</option>
+            </select>
+            <input class="color-picker-hidden" type="color" id="font-color-picker" aria-label="自定义字体颜色">
+            <select class="btn" id="font-size-select" title="字体大小">
+                <option value="14">14px</option>
+                <option value="16">16px</option>
+                <option value="18" selected>18px</option>
+                <option value="20">20px</option>
+                <option value="22">22px</option>
+                <option value="24">24px</option>
+                <option value="28">28px</option>
+            </select>
+            <button class="btn" id="save-btn" title="手动保存 (Ctrl+S)">保存</button>
+            <button class="btn" id="export-btn" title="导出内容">导出</button>
+        </div>
+    </div>
+    
+    <!-- 安装触发按钮和安装指导弹窗已移除 -->
+    
+    <!-- 导出选项弹窗 -->
+    <div class="export-modal" id="export-modal">
+        <div class="modal-content">
+            <div class="modal-title">导出选项</div>
+            
+            <div class="export-options">
+                <div class="export-option" id="export-txt">
+                    <div class="option-icon">📄</div>
+                    <div class="option-text">
+                        <div class="option-title">导出为文本文件 (.txt)</div>
+                        <div class="option-desc">通用格式，可在任何编辑器中打开</div>
+                    </div>
+                </div>
+                
+                <div class="export-option" id="export-copy">
+                    <div class="option-icon">📋</div>
+                    <div class="option-text">
+                        <div class="option-title">复制到剪贴板</div>
+                        <div class="option-desc">快速粘贴到其他应用程序</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="guide-btn" id="close-export">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 临时消息 -->
+    <div class="message" id="message"></div>
+
+    <script>
+        // DOM元素
+        const editor = document.getElementById('editor');
+        const wordCountEl = document.getElementById('word-count');
+        const speedCountEl = document.getElementById('speed-count');
+        const saveBtn = document.getElementById('save-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const alignCenterBtn = document.getElementById('align-center-btn');
+        const fontColorSelect = document.getElementById('font-color-select');
+        const fontColorPicker = document.getElementById('font-color-picker');
+        const fontSizeSelect = document.getElementById('font-size-select');
+        const exportModal = document.getElementById('export-modal');
+        const exportTxtBtn = document.getElementById('export-txt');
+        const exportCopyBtn = document.getElementById('export-copy');
+        const closeExportBtn = document.getElementById('close-export');
+        const messageEl = document.getElementById('message');
+        
+        // 统计变量
+        let isTyping = false;
+        let startTime = null;
+        let lastWordCount = 0;
+        let speedInterval = null;
+
+        // 自动保存（草稿）：每 30 分钟保存一次（并在关闭前兜底保存）
+        const AUTO_SAVE_INTERVAL = 30 * 60 * 1000; // 30 min
+        let autoSaveTimer = null;
+        let lastAutoSaveAt = Date.now();
+        // 初始化
+        function init() {
+            // 加载内容：优先恢复“未保存草稿”，否则加载“手动保存内容”
+            const savedContent = localStorage.getItem('writingContent') || '';
+            const savedAt = parseInt(localStorage.getItem('writingContentSavedAt') || '0', 10);
+
+            const draftContent = localStorage.getItem('writingDraft') || '';
+            const draftAt = parseInt(localStorage.getItem('writingDraftSavedAt') || '0', 10);
+
+            const useDraft = draftContent && draftAt > savedAt;
+
+            if (useDraft) {
+                editor.value = draftContent;
+                updateStats();
+                setTimeout(() => showMessage('已恢复未保存草稿'), 300);
+            } else if (savedContent) {
+                editor.value = savedContent;
+                updateStats();
+            }
+
+// 加载对齐方式（默认左对齐）
+            const savedAlign = localStorage.getItem('writingAlign') || 'left';
+            setEditorAlign(savedAlign);
+            if (alignCenterBtn) {
+                alignCenterBtn.addEventListener('click', () => {
+                    const current = (localStorage.getItem('writingAlign') || 'left');
+                    const next = current === 'center' ? 'left' : 'center';
+                    localStorage.setItem('writingAlign', next);
+                    setEditorAlign(next);
+                    editor.focus();
+                });
+            }
+
+
+            // 加载字号设置
+            const savedFontSize = localStorage.getItem('writingFontSize') || '18';
+            if (fontSizeSelect) {
+                fontSizeSelect.value = savedFontSize;
+                fontSizeSelect.addEventListener('change', () => {
+                    const size = parseInt(fontSizeSelect.value, 10) || 18;
+                    setEditorFontSize(size);
+                    localStorage.setItem('writingFontSize', String(size));
+                });
+            }
+            setEditorFontSize(parseInt(savedFontSize, 10) || 18);
+
+            // 加载字体颜色（偏“低饱和、不刺眼”，但仍能看出区别）
+            const savedFontColor = (localStorage.getItem('writingFontColor') || '#2f2f2f').toLowerCase();
+            setEditorFontColor(savedFontColor);
+
+            if (fontColorPicker) {
+                fontColorPicker.value = normalizeHex(savedFontColor);
+                fontColorPicker.addEventListener('input', () => {
+                    applyCustomColor(fontColorPicker.value);
+                });
+            }
+
+            if (fontColorSelect) {
+                const presetValues = Array.from(fontColorSelect.options)
+                    .map(o => (o.value || '').toLowerCase())
+                    .filter(v => v && v !== 'custom');
+
+                fontColorSelect.value = presetValues.includes(savedFontColor) ? savedFontColor : 'custom';
+
+                fontColorSelect.addEventListener('change', () => {
+                    const v = (fontColorSelect.value || '').toLowerCase();
+                    if (v === 'custom') {
+                        if (fontColorPicker) {
+                            fontColorPicker.value = normalizeHex(getCurrentColor());
+                            fontColorPicker.click();
+                        } else {
+                            showMessage('当前浏览器不支持颜色选择器', true);
+                        }
+                        return;
+                    }
+                    setEditorFontColor(v);
+                    localStorage.setItem('writingFontColor', v);
+                    if (fontColorPicker) fontColorPicker.value = normalizeHex(v);
+                    editor.focus();
+                });
+            }
+
+            // 默认去掉大空白：把编辑器内边距调小
+            setEditorPadding(getBasePaddingX(), getBasePaddingY());
+
+            initWindowControlsOverlay();
+
+            // 注册 Service Worker（用于离线与更新）
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            }
+
+            // 事件监听
+            editor.addEventListener('input', handleInput);
+            editor.addEventListener('focus', startTypingTimer);
+            editor.addEventListener('blur', stopTypingTimer);
+            
+            // 按钮事件
+            saveBtn.addEventListener('click', saveContent);
+            exportBtn.addEventListener('click', showExportModal);
+            
+            // 导出相关
+            exportTxtBtn.addEventListener('click', exportAsTxt);
+            exportCopyBtn.addEventListener('click', copyToClipboard);
+            closeExportBtn.addEventListener('click', () => exportModal.style.display = 'none');
+            
+            // 键盘快捷键
+            document.addEventListener('keydown', (e) => {
+                // Ctrl+S 保存
+                if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    saveContent();
+                }
+                
+                // Ctrl+E 导出
+                if (e.ctrlKey && e.key === 'e') {
+                    e.preventDefault();
+                    showExportModal();
+                }
+
+                // Ctrl+Shift+Q 关闭窗口（自定义快捷键）
+                if (e.ctrlKey && e.shiftKey && (e.key === 'Q' || e.key === 'q')) {
+                    e.preventDefault();
+                    tryCloseApp();
+                }
+
+                // Ctrl+Q / Cmd+Q 关闭应用
+                if ((e.ctrlKey || e.metaKey) && (e.key === 'q' || e.key === 'Q')) {
+                    e.preventDefault();
+                    tryCloseApp();
+                }
+                
+                // F11 全屏
+                if (e.key === 'F11') {
+                    // 全屏时调整编辑器内边距
+                    setTimeout(() => {
+                        if (document.fullscreenElement) {
+                            // 全屏：稍微增加一点内边距，但不覆盖用户设置的字号
+                            setEditorPadding(getBasePaddingX(), getBasePaddingY());
+                        } else {
+                            setEditorPadding(getBasePaddingX(), getBasePaddingY());
+
+            initWindowControlsOverlay();
+
+            // 注册 Service Worker（用于离线与更新）
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
+            }
+                        }
+                    }, 100);
+                }
+            });
+            
+            // 点击页面其他位置关闭弹窗
+            document.addEventListener('click', (e) => {
+                if (e.target === exportModal) {
+                    exportModal.style.display = 'none';
+                }
+            });
+            
+            // 显示欢迎消息
+            setTimeout(() => {
+                showMessage('Ctrl+S保存 · Ctrl+Shift+C居中 · Ctrl+Shift+Q关闭 · 字色可调 · 草稿每30分钟自动保存');
+            }, 1000);
+        }
+        
+
+        // 编辑器样式（字号/内边距）
+        // 你说“编辑区上方的空白都去掉”，所以默认把上内边距设为 0，
+        // 左右留一点点（更好看，也不贴边）。
+        function getBasePaddingX() { return 14; }
+        function getBasePaddingY() { return 0; }
+
+        function setEditorPadding(x, y) {
+            document.documentElement.style.setProperty('--editor-padding-x', x + 'px');
+            document.documentElement.style.setProperty('--editor-padding-y', y + 'px');
+        }
+
+        function setEditorFontSize(px) {
+            document.documentElement.style.setProperty('--editor-font-size', px + 'px');
+        }
+
+        function setEditorFontColor(hex) {
+            document.documentElement.style.setProperty('--editor-color', normalizeHex(hex));
+        }
+
+        function getCurrentColor() {
+            const v = getComputedStyle(document.documentElement).getPropertyValue('--editor-color').trim();
+            return normalizeHex(v || '#2f2f2f');
+        }
+
+        function normalizeHex(hex) {
+            if (!hex) return '#2f2f2f';
+            let h = String(hex).trim().toLowerCase();
+            if (!h.startsWith('#')) h = '#' + h;
+            if (h.length === 4) {
+                // #rgb -> #rrggbb
+                h = '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
+            }
+            if (!/^#[0-9a-f]{6}$/.test(h)) return '#2f2f2f';
+            return h;
+        }
+
+        function applyCustomColor(hex) {
+            const softened = softenHex(normalizeHex(hex));
+            setEditorFontColor(softened);
+            localStorage.setItem('writingFontColor', softened);
+            if (fontColorSelect) fontColorSelect.value = 'custom';
+            if (fontColorPicker) fontColorPicker.value = softened;
+        }
+
+        // 把任意颜色“柔和化”：降低饱和度、限制亮度，让文字颜色更接近墨色
+        function softenHex(hex) {
+            const rgb = hexToRgb(hex);
+            if (!rgb) return '#2f2f2f';
+            const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+
+            const s = Math.min(hsl.s, 25);          // 最高 25% 饱和度（不刺眼）
+            const l = Math.min(Math.max(hsl.l, 18), 30); // 限制在偏深的亮度范围
+
+            const out = hslToRgb(hsl.h, s, l);
+            return rgbToHex(out.r, out.g, out.b);
+        }
+
+        function hexToRgb(hex) {
+            const h = normalizeHex(hex);
+            const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/.exec(h);
+            if (!m) return null;
+            return {
+                r: parseInt(m[1], 16),
+                g: parseInt(m[2], 16),
+                b: parseInt(m[3], 16)
+            };
+        }
+
+        function rgbToHex(r, g, b) {
+            const to = (n) => {
+                const v = Math.max(0, Math.min(255, Math.round(n)));
+                return v.toString(16).padStart(2, '0');
+            };
+            return '#' + to(r) + to(g) + to(b);
+        }
+
+        // r,g,b: 0..255  ->  h:0..360, s/l:0..100
+        function rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h = 0, s = 0;
+            const l = (max + min) / 2;
+
+            if (max !== min) {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h *= 60;
+            }
+            return { h, s: s * 100, l: l * 100 };
+        }
+
+        // h:0..360, s/l:0..100  ->  r,g,b:0..255
+        function hslToRgb(h, s, l) {
+            s /= 100; l /= 100;
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const hh = (h % 360) / 60;
+            const x = c * (1 - Math.abs(hh % 2 - 1));
+            let r1 = 0, g1 = 0, b1 = 0;
+
+            if (0 <= hh && hh < 1) { r1 = c; g1 = x; }
+            else if (1 <= hh && hh < 2) { r1 = x; g1 = c; }
+            else if (2 <= hh && hh < 3) { g1 = c; b1 = x; }
+            else if (3 <= hh && hh < 4) { g1 = x; b1 = c; }
+            else if (4 <= hh && hh < 5) { r1 = x; b1 = c; }
+            else if (5 <= hh && hh < 6) { r1 = c; b1 = x; }
+
+            const m = l - c / 2;
+            return {
+                r: (r1 + m) * 255,
+                g: (g1 + m) * 255,
+                b: (b1 + m) * 255
+            };
+        }
+
+
+        function getCurrentAlign() {
+            const v = getComputedStyle(document.documentElement).getPropertyValue('--editor-text-align').trim();
+            return v || 'left';
+        }
+
+        function setEditorAlign(align) {
+            const v = (align === 'center') ? 'center' : 'left';
+            document.documentElement.style.setProperty('--editor-text-align', v);
+            localStorage.setItem('writingAlign', v);
+            if (alignCenterBtn) {
+                alignCenterBtn.classList.toggle('active', v === 'center');
+            }
+        }
+
+        // 自动保存草稿
+        function saveDraft() {
+            try {
+                localStorage.setItem('writingDraft', editor.value);
+                localStorage.setItem('writingDraftSavedAt', String(Date.now()));
+                lastAutoSaveAt = Date.now();
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        function scheduleAutoSave() {
+            // 已经安排了下一次自动保存，就不重复安排（避免每次按键都重置计时）
+            if (autoSaveTimer) return;
+
+            const now = Date.now();
+            const dueIn = Math.max(0, AUTO_SAVE_INTERVAL - (now - lastAutoSaveAt));
+
+            autoSaveTimer = setTimeout(() => {
+                autoSaveTimer = null;
+                saveDraft();
+            }, dueIn);
+        }
+
+        // 兜底：窗口关闭前再存一次草稿
+        window.addEventListener('beforeunload', () => {
+            saveDraft();
+        });
+
+        function tryCloseApp() {
+            try {
+                window.close();
+            } catch (_) {
+                // ignore
+            }
+            // 如果浏览器阻止 window.close()，提示用户用系统快捷键关闭
+            setTimeout(() => {
+                showMessage('如果没有关闭，请用 Alt+F4', false);
+            }, 150);
+        }
+
+        // Window Controls Overlay（Edge/Chrome 桌面 PWA 标题栏覆盖）
+        // 如果浏览器支持，会让网页内容“顶到最上面”，消除你看到的那条白色标题栏占位。
+        function initWindowControlsOverlay() {
+            const mm = window.matchMedia && window.matchMedia('(display-mode: window-controls-overlay)');
+            if (!mm) return;
+
+            const apply = () => {
+                document.documentElement.classList.toggle('wco', mm.matches);
+            };
+            apply();
+            try {
+                mm.addEventListener('change', apply);
+            } catch (_) {
+                // Safari/旧实现
+                mm.addListener(apply);
+            }
+        }
+
+        // 处理输入
+        function handleInput() {
+            updateStats();
+            startTypingTimer();
+            scheduleAutoSave();
+        }
+        
+        // 开始计时
+        function startTypingTimer() {
+            if (!isTyping) {
+                isTyping = true;
+                startTime = Date.now();
+                lastWordCount = countWords(editor.value);
+                
+                // 清除旧的计时器
+                if (speedInterval) clearInterval(speedInterval);
+                
+                // 每5秒更新速度
+                speedInterval = setInterval(updateSpeed, 5000);
+            }
+        }
+        
+        // 停止计时
+        function stopTypingTimer() {
+            isTyping = false;
+            if (speedInterval) {
+                clearInterval(speedInterval);
+                speedInterval = null;
+            }
+        }
+        
+        // 更新速度
+        function updateSpeed() {
+            if (!isTyping || !startTime) return;
+            
+            const currentWords = countWords(editor.value);
+            const timeDiff = (Date.now() - startTime) / 60000;
+            
+            if (timeDiff > 0) {
+                const wordsTyped = currentWords - lastWordCount;
+                const speed = Math.round(wordsTyped / timeDiff);
+                speedCountEl.textContent = Math.max(0, speed);
+                
+                // 重置
+                startTime = Date.now();
+                lastWordCount = currentWords;
+            }
+        }
+        
+        // 统计字数
+        function countWords(text) {
+            if (!text || text.trim() === '') return 0;
+            
+            // 中文字符
+            const chineseMatches = text.match(/[\u4e00-\u9fa5]/g);
+            // 英文单词（至少2个字母）
+            const englishMatches = text.match(/\b[a-zA-Z]{2,}\b/g);
+            
+            let chineseCount = chineseMatches ? chineseMatches.length : 0;
+            let englishCount = englishMatches ? englishMatches.length : 0;
+            
+            return chineseCount + englishCount;
+        }
+        
+        // 更新统计
+        function updateStats() {
+            const words = countWords(editor.value);
+            wordCountEl.textContent = words;
+        }
+        
+        // 保存内容（手动保存）
+        function saveContent() {
+            localStorage.setItem('writingContent', editor.value);
+            localStorage.setItem('writingContentSavedAt', String(Date.now()));
+            // 保存后清掉草稿，避免下次恢复错内容
+            localStorage.removeItem('writingDraft');
+            localStorage.removeItem('writingDraftSavedAt');
+            showMessage('已保存');
+        }
+
+// 显示导出选项
+        function showExportModal() {
+            exportModal.style.display = 'flex';
+        }
+        
+        // 导出为TXT文件
+        function exportAsTxt() {
+            const content = editor.value;
+            if (!content.trim()) {
+                showMessage('请输入内容后再导出', true);
+                exportModal.style.display = 'none';
+                return;
+            }
+            
+            const title = prompt('输入文件名（可选）：', '我的写作') || '我的写作';
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            exportModal.style.display = 'none';
+            showMessage(`已导出为 ${title}.txt`);
+        }
+        
+        // 复制到剪贴板
+        function copyToClipboard() {
+            const content = editor.value;
+            if (!content.trim()) {
+                showMessage('请输入内容后再复制', true);
+                exportModal.style.display = 'none';
+                return;
+            }
+            
+            navigator.clipboard.writeText(content)
+                .then(() => {
+                    exportModal.style.display = 'none';
+                    showMessage('内容已复制到剪贴板');
+                })
+                .catch(err => {
+                    console.error('复制失败: ', err);
+                    // 备用方法
+                    const textArea = document.createElement('textarea');
+                    textArea.value = content;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    
+                    exportModal.style.display = 'none';
+                    showMessage('内容已复制到剪贴板');
+                });
+        }
+        
+        // 显示消息
+        function showMessage(text, isError = false) {
+            messageEl.textContent = text;
+            messageEl.style.backgroundColor = isError ? '#dc3545' : '#495057';
+            messageEl.style.display = 'block';
+            
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 2000);
+        }
+        
+        // 启动应用
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
